@@ -8,12 +8,21 @@ from firebase_admin import credentials, firestore
 from datetime import datetime
 import pytz
 
-# ==========================================
-# 0. CONEXIÓN A FIREBASE
-# ==========================================
+# ==============================================================================
+# 0. CONEXIÓN A FIREBASE (INTELIGENTE: PC y NUBE)
+# ==============================================================================
 if not firebase_admin._apps:
     try:
-        cred = credentials.Certificate("serviceAccountKey.json")
+        # CASO A: Estás en tu computadora (Existe el archivo)
+        if os.path.exists("serviceAccountKey.json"):
+            cred = credentials.Certificate("serviceAccountKey.json")
+        
+        # CASO B: Estás en la Nube (Streamlit Cloud usa "Secrets")
+        else:
+            # Esto busca la configuración interna de la nube
+            key_dict = dict(st.secrets["firebase"])
+            cred = credentials.Certificate(key_dict)
+            
         firebase_admin.initialize_app(cred)
     except Exception as e:
         st.error(f"❌ Error conectando a Firebase: {e}")
@@ -102,7 +111,6 @@ def load_data():
 def guardar_alumno(datos):
     try:
         dni = str(datos['alumno']['dni'])
-        # Aseguramos guardar el docente
         datos['alumno']['docente'] = datos['alumno'].get('docente', 'No registrado')
         
         registro = {
@@ -125,7 +133,7 @@ def guardar_alumno(datos):
         return False
 
 # ==========================================
-# 4. REPORTES PDF (ACTUALIZADO)
+# 4. REPORTES PDF
 # ==========================================
 def generar_reporte_pdf(df_resultados):
     
@@ -138,9 +146,7 @@ def generar_reporte_pdf(df_resultados):
     pdf = PDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # ----------------------------------------------------
-    # PAGINA 1: TOP 20 MEJORES ALUMNOS
-    # ----------------------------------------------------
+    # REPORTE 1: TOP 20
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "TOP 20 MEJORES ALUMNOS POR CATEGORIA", ln=True, align='C')
@@ -177,25 +183,21 @@ def generar_reporte_pdf(df_resultados):
                 rank += 1
         pdf.ln(5)
         
-    # ----------------------------------------------------
-    # PAGINA 2: RECONOCIMIENTO INSTITUCIONAL (CAMPEÓN)
-    # ----------------------------------------------------
+    # REPORTE 2: CAMPEÓN
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "RECONOCIMIENTO INSTITUCIONAL", ln=True, align='C')
     pdf.ln(5)
     
     if not df_resultados.empty:
-        # Sumar puntajes de todos los participantes del colegio
         camp = df_resultados.groupby("Colegio")["Puntaje"].sum().reset_index()
         camp = camp.sort_values(by="Puntaje", ascending=False)
         
         if not camp.empty:
-            # --- 1er PUESTO: GALLARDETE ---
             ganador = camp.iloc[0]
             col_ganador = str(ganador['Colegio']).encode('latin-1', 'replace').decode('latin-1')
             
-            pdf.set_fill_color(255, 215, 0) # Dorado
+            pdf.set_fill_color(255, 215, 0)
             pdf.rect(10, pdf.get_y(), 190, 40, 'F')
             pdf.set_y(pdf.get_y() + 5)
             
@@ -209,27 +211,23 @@ def generar_reporte_pdf(df_resultados):
             pdf.cell(0, 8, f"PUNTAJE ACUMULADO: {ganador['Puntaje']} Puntos", ln=True, align='C')
             pdf.ln(15)
             
-            # --- 2do y 3er PUESTO: MENCIÓN HONORÍFICA ---
             pdf.set_font("Arial", "B", 14)
             pdf.cell(0, 10, "MENCION HONORIFICA", ln=True, align='C')
             
-            # 2do Puesto
             if len(camp) > 1:
                 segundo = camp.iloc[1]
                 col_2 = str(segundo['Colegio']).encode('latin-1', 'replace').decode('latin-1')
-                pdf.set_fill_color(220, 220, 220) # Plata
+                pdf.set_fill_color(220, 220, 220)
                 pdf.cell(0, 10, f"2do Puesto: {col_2} ({segundo['Puntaje']} pts)", ln=True, fill=True, align='C')
             
-            # 3er Puesto
             if len(camp) > 2:
                 tercero = camp.iloc[2]
                 col_3 = str(tercero['Colegio']).encode('latin-1', 'replace').decode('latin-1')
-                pdf.set_fill_color(205, 127, 50) # Bronce (aprox)
+                pdf.set_fill_color(205, 127, 50)
                 pdf.cell(0, 10, f"3er Puesto: {col_3} ({tercero['Puntaje']} pts)", ln=True, fill=True, align='C')
             
             pdf.ln(10)
             
-            # Tabla Resumen Top 5
             pdf.set_font("Arial", "B", 12)
             pdf.cell(0, 10, "Ranking General de Instituciones (Top 5):", ln=True)
             r = 1
@@ -241,34 +239,28 @@ def generar_reporte_pdf(df_resultados):
                 pdf.cell(30, 8, f"{row['Puntaje']} pts", 0, ln=True)
                 r += 1
 
-    # ----------------------------------------------------
-    # PAGINA 3: RECONOCIMIENTO DOCENTE
-    # ----------------------------------------------------
+    # REPORTE 3: DOCENTES
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "RECONOCIMIENTO DOCENTE", ln=True, align='C')
     pdf.ln(5)
     
     pdf.set_font("Arial", "", 11)
-    texto_res = (
-        "Se otorgara Resolucion Directoral Regional de reconocimiento y "
-        "felicitacion a los docentes asesores de los estudiantes que ocupen "
-        "los tres primeros puestos en cada categoria."
-    )
+    texto_res = ("Se otorgara Resolucion Directoral Regional de reconocimiento y "
+                 "felicitacion a los docentes asesores de los estudiantes que ocupen "
+                 "los tres primeros puestos en cada categoria.")
     pdf.multi_cell(0, 6, texto_res, 0, 'C')
     pdf.ln(10)
     
     for cat in categorias:
         pdf.set_font("Arial", "B", 12)
         pdf.set_text_color(255, 255, 255)
-        pdf.set_fill_color(0, 51, 102) # Azul oscuro
+        pdf.set_fill_color(0, 51, 102)
         pdf.cell(0, 10, f" CATEGORIA {cat}", ln=True, fill=True)
         pdf.set_text_color(0, 0, 0)
         
         if not df_resultados.empty:
-            # Top 3 por categoría
             top3 = df_resultados[df_resultados["Categoría"] == cat].sort_values(by="Puntaje", ascending=False).head(3)
-            
             puesto = 1
             for _, row in top3.iterrows():
                 docente = str(row.get("Docente", "No registrado")).encode('latin-1', 'replace').decode('latin-1')
@@ -277,21 +269,18 @@ def generar_reporte_pdf(df_resultados):
                 ptj = row.get("Puntaje", 0)
                 
                 pdf.ln(2)
-                # Fila de Puesto
                 pdf.set_font("Arial", "B", 11)
                 pdf.set_fill_color(240, 240, 240)
                 pdf.cell(20, 8, f"{puesto} Puesto", 0, 0, fill=True)
                 pdf.set_font("Arial", "", 11)
                 pdf.cell(0, 8, f"  Alumno: {est}  ({ptj} pts)", 0, 1, fill=True)
                 
-                # Fila de Docente
-                pdf.set_text_color(0, 100, 0) # Verde oscuro
+                pdf.set_text_color(0, 100, 0)
                 pdf.set_font("Arial", "B", 11)
-                pdf.cell(20, 6, "", 0) # Sangría
+                pdf.cell(20, 6, "", 0)
                 pdf.cell(0, 6, f"DOCENTE ASESOR: {docente}", 0, 1)
                 pdf.set_text_color(0,0,0)
                 
-                # Fila de Colegio
                 pdf.set_font("Arial", "I", 10)
                 pdf.cell(20, 5, "", 0)
                 pdf.cell(0, 5, f"Institucion: {col}", 0, 1)

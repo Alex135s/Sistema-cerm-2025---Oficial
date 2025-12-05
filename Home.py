@@ -3,11 +3,47 @@ from styles import load_styles
 import utils
 import pandas as pd
 
-# Cargar estilos
+# 1. Configuración de página
 load_styles()
-st.set_page_config(page_title="Dashboard CERM 2025", layout="wide", initial_sidebar_state="collapsed")
+st.set_page_config(page_title="CERM 2025", layout="wide")
 
-# --- 1. HEADER TIPO EMPRESARIAL ---
+# ==============================================================================
+# BLOQUE DE SEGURIDAD (LOGIN)
+# ==============================================================================
+def check_password():
+    """Retorna True si el usuario ingresó la clave correcta."""
+    # Si ya ingresó correctamente antes, pasar directo
+    if st.session_state.get("password_correct", False):
+        return True
+
+    # Mostrar pantalla de login
+    st.markdown("""
+    <div style='text-align: center; padding: 50px;'>
+        <h1 style='color: #1A3A8C;'>🔐 Sistema CERM 2025</h1>
+        <p>Acceso restringido solo para personal autorizado.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        pwd = st.text_input("Ingrese la clave de acceso:", type="password")
+        if st.button("Ingresar al Sistema", use_container_width=True):
+            # --- AQUÍ DEFINES TU CONTRASEÑA ---
+            if pwd == "cerm2025":  
+                st.session_state.password_correct = True
+                st.rerun()
+            else:
+                st.error("🚫 Clave incorrecta")
+    return False
+
+# Si no ha puesto la clave, detenemos todo aquí.
+if not check_password():
+    st.stop()
+
+# ==============================================================================
+# AQUÍ EMPIEZA EL SISTEMA REAL (SOLO VISIBLE SI HAY CLAVE)
+# ==============================================================================
+
 st.markdown("""
 <div class="header-container">
     <h1 class="header-title">🎓 Sistema de Gestión de Evaluación</h1>
@@ -15,8 +51,7 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- 2. CÁLCULO DE MÉTRICAS (DATA REAL) ---
-# Intentamos cargar los datos para mostrar números reales en el dashboard
+# Cargar métricas
 df = utils.cargar_directorio_csv()
 
 if not df.empty:
@@ -28,8 +63,7 @@ else:
     total_colegios = 0
     total_ugel = 0
 
-# --- 3. SECCIÓN DE ESTADÍSTICAS (KPIs) ---
-# Usamos columnas de Streamlit con HTML personalizado para las tarjetitas
+# Tarjetas de Estadísticas
 kpi1, kpi2, kpi3 = st.columns(3)
 
 with kpi1:
@@ -56,22 +90,21 @@ with kpi3:
     </div>
     """, unsafe_allow_html=True)
 
-st.write("") # Espacio
+st.write("") 
 st.write("") 
 
-# --- 4. MENÚ PRINCIPAL (GRID) ---
-# Creamos un grid 2x2 para las acciones
-col1, col2, col3, col4 = st.columns(4)
+# Menú de Navegación
+col1, col2 = st.columns(2)
 
 with col1:
     st.markdown("""
         <div class="nav-card">
             <span class="nav-icon">📝</span>
             <div class="nav-title">Registro</div>
-            <div class="nav-desc">Inscripción de estudiantes, llenado de fichas ópticas y validación de datos.</div>
+            <div class="nav-desc">Registra participantes y sus 20 respuestas.</div>
         </div>
     """, unsafe_allow_html=True)
-    if st.button("Nuevo Registro", key="btn_reg", use_container_width=True, type="primary"):
+    if st.button("Ir a Registro", key="registro_btn", use_container_width=True, type="primary"):
         st.switch_page("pages/Registro.py")
 
 with col2:
@@ -79,18 +112,20 @@ with col2:
         <div class="nav-card">
             <span class="nav-icon">📊</span>
             <div class="nav-title">Resultados</div>
-            <div class="nav-desc">Visualiza el ranking en tiempo real, reportes por colegio y estadísticas.</div>
+            <div class="nav-desc">Top 20, estadísticas y exportación.</div>
         </div>
     """, unsafe_allow_html=True)
-    if st.button("Ver Dashboard", key="btn_res", use_container_width=True):
+    if st.button("Ver Resultados", key="resultados_btn", use_container_width=True):
         st.switch_page("pages/Resultados.py")
+
+col3, col4 = st.columns(2)
 
 with col3:
     st.markdown("""
         <div class="nav-card">
             <span class="nav-icon">✏️</span>
             <div class="nav-title">Edición</div>
-            <div class="nav-desc">Corrige nombres mal escritos, DNI duplicados o respuestas erróneas.</div>
+            <div class="nav-desc">Corrige datos, respuestas y recalcula notas.</div>
         </div>
     """, unsafe_allow_html=True)
     if st.button("Gestionar Datos", key="btn_edit", use_container_width=True):
@@ -101,16 +136,15 @@ with col4:
         <div class="nav-card">
             <span class="nav-icon">⚙️</span>
             <div class="nav-title">Configuración</div>
-            <div class="nav-desc">Define las claves de respuestas (Patrón) para las categorías A, B y C.</div>
+            <div class="nav-desc">Define claves oficiales por categoría.</div>
         </div>
     """, unsafe_allow_html=True)
     if st.button("Ajustes", key="btn_conf", use_container_width=True):
         st.switch_page("pages/Configuracion.py")
 
-# --- FOOTER ---
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #9CA3AF; font-size: 12px;">
-    © 2025 Sistema de Evaluación Académica · Versión 2.1 · Soporte TI
+    © 2025 Sistema de Evaluación Académica · Versión 3.0 (Nube) · Soporte TI
 </div>
 """, unsafe_allow_html=True)
