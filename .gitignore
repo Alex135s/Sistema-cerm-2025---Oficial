@@ -1,0 +1,15 @@
+# --- SEGURIDAD (CRÍTICO) ---
+serviceAccountKey.json
+.env
+secrets.toml
+
+# --- DATOS PRIVADOS (NO SUBIR) ---
+*.csv
+*.xlsx
+resultados_examenes.json
+directorio_alumnos.json
+
+# --- PYTHON ---
+__pycache__/
+*.pyc
+.DS_Store
