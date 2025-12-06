@@ -62,10 +62,10 @@ inst_val = ""
 ugel_val = ""
 gestion_val = "Gestión pública"
 grado_val = "1ro"
-cat_val = "A"
+cat_val = "CAT 3" # Valor por defecto actualizado
 docente_val = "No registrado"
 respuestas_actuales = [""] * 20 
-hora_val = "09:30" # Valor por defecto
+hora_val = "09:30" 
 examen_encontrado = False
 
 # --- CARGA DE DATOS ---
@@ -103,6 +103,11 @@ if seleccion and seleccion != "":
             info = examen.get("info_registro", {})
             if isinstance(info, dict):
                 hora_val = info.get("hora_entrega", "09:30")
+                
+            # Si el examen tenía una categoría guardada, usamos esa (útil si se cambió manualmente)
+            cat_guardada = examen.get("categoria")
+            if cat_guardada:
+                cat_val = cat_guardada
         else:
             st.warning(f"⚠️ El alumno {nombre_val} está en el padrón pero **NO TIENE EXAMEN REGISTRADO** aún.")
 
@@ -123,8 +128,18 @@ with st.form("form_edicion"):
         idx_g = grados.index(grado_val) if grado_val in grados else 0
         new_grado = st.selectbox("Grado", grados, index=idx_g)
         
-        cats = ["A", "B", "C"]
-        idx_c = cats.index(cat_val) if cat_val in cats else 0
+        # --- AQUÍ ESTABA EL ERROR: ACTUALIZAMOS LAS OPCIONES ---
+        cats = ["CAT 1", "CAT 2", "CAT 3"]
+        
+        # Intentamos encontrar el índice de la categoría actual
+        try:
+            idx_c = cats.index(cat_val)
+        except:
+            # Si tiene una categoría vieja ("A", "B", "C"), calculamos la nueva por defecto
+            if new_grado == "5to": idx_c = 0 # CAT 1
+            elif new_grado in ["3ro", "4to"]: idx_c = 1 # CAT 2
+            else: idx_c = 2 # CAT 3
+            
         new_cat = st.selectbox("Categoría", cats, index=idx_c)
 
         gests = ["Gestión pública", "Gestión privada"]
@@ -160,18 +175,16 @@ with st.form("form_edicion"):
             with cols_r[col_idx]:
                 val_prev = respuestas_actuales[i-1]
                 
-                # Calcular índice
                 try: idx_r = opciones.index(val_prev)
                 except: idx_r = 0
                 
-                # TRUCO MAESTRO: key única usando DNI para que se refresque
                 key_unica = f"ed_p{i}_{dni_val}" 
                 
                 val = st.selectbox(
                     f"P{i}", 
                     opciones, 
                     index=idx_r, 
-                    key=key_unica, # <--- ESTO SOLUCIONA EL PROBLEMA
+                    key=key_unica,
                     label_visibility="collapsed"
                 )
                 st.caption(f"P{i}")

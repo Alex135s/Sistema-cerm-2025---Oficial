@@ -5,7 +5,7 @@ import pandas as pd
 
 # 1. Configuración de página
 load_styles()
-st.set_page_config(page_title="CERM 2025", layout="wide")
+st.set_page_config(page_title="CERM 2025", layout="wide", initial_sidebar_state="collapsed")
 
 # ==============================================================================
 # BLOQUE DE SEGURIDAD (LOGIN)
@@ -41,7 +41,7 @@ if not check_password():
     st.stop()
 
 # ==============================================================================
-# AQUÍ EMPIEZA EL SISTEMA REAL (SOLO VISIBLE SI HAY CLAVE)
+# SISTEMA PRINCIPAL (DASHBOARD)
 # ==============================================================================
 
 st.markdown("""
@@ -51,8 +51,11 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# Cargar métricas
-df = utils.cargar_directorio_csv()
+# --- CÁLCULO DE MÉTRICAS (DATA REAL) ---
+try:
+    df = utils.cargar_directorio_csv()
+except:
+    df = pd.DataFrame()
 
 if not df.empty:
     total_alumnos = len(df)
@@ -63,7 +66,7 @@ else:
     total_colegios = 0
     total_ugel = 0
 
-# Tarjetas de Estadísticas
+# --- TARJETAS DE ESTADÍSTICAS (KPIs) ---
 kpi1, kpi2, kpi3 = st.columns(3)
 
 with kpi1:
@@ -93,7 +96,7 @@ with kpi3:
 st.write("") 
 st.write("") 
 
-# Menú de Navegación
+# --- MENÚ DE NAVEGACIÓN ---
 col1, col2 = st.columns(2)
 
 with col1:
@@ -112,7 +115,7 @@ with col2:
         <div class="nav-card">
             <span class="nav-icon">📊</span>
             <div class="nav-title">Resultados</div>
-            <div class="nav-desc">Top 20, estadísticas y exportación.</div>
+            <div class="nav-desc">Top 20, estadísticas y exportación de reportes PDF.</div>
         </div>
     """, unsafe_allow_html=True)
     if st.button("Ver Resultados", key="resultados_btn", use_container_width=True):
@@ -125,7 +128,7 @@ with col3:
         <div class="nav-card">
             <span class="nav-icon">✏️</span>
             <div class="nav-title">Edición</div>
-            <div class="nav-desc">Corrige datos, respuestas y recalcula notas.</div>
+            <div class="nav-desc">Corrige datos personales o respuestas de exámenes ya procesados.</div>
         </div>
     """, unsafe_allow_html=True)
     if st.button("Gestionar Datos", key="btn_edit", use_container_width=True):
@@ -136,15 +139,32 @@ with col4:
         <div class="nav-card">
             <span class="nav-icon">⚙️</span>
             <div class="nav-title">Configuración</div>
-            <div class="nav-desc">Define claves oficiales por categoría.</div>
+            <div class="nav-desc">Define claves oficiales (CAT 1, 2, 3) y ve el historial de cambios.</div>
         </div>
     """, unsafe_allow_html=True)
     if st.button("Ajustes", key="btn_conf", use_container_width=True):
         st.switch_page("pages/Configuracion.py")
 
+st.write("")
+
+# --- BOTÓN DE GESTIÓN DE DIRECTORIO ---
+col5, col6 = st.columns(2)
+
+with col5:
+    st.markdown("""
+        <div class="nav-card">
+            <span class="nav-icon">📇</span>
+            <div class="nav-title">Directorio</div>
+            <div class="nav-desc">Agrega nuevos estudiantes o elimina registros incorrectos manualmente.</div>
+        </div>
+    """, unsafe_allow_html=True)
+    if st.button("Gestionar Directorio", key="btn_directorio", use_container_width=True):
+        st.switch_page("pages/Directorio.py")
+
+# --- FOOTER ---
 st.markdown("---")
 st.markdown("""
 <div style="text-align: center; color: #9CA3AF; font-size: 12px;">
-    © 2025 Sistema de Evaluación Académica · Versión 3.0 (Nube) · Soporte TI
+    © 2025 Sistema de Evaluación Académica · Versión 3.5 (Nube) · Soporte TI
 </div>
 """, unsafe_allow_html=True)

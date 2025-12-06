@@ -13,13 +13,12 @@ import pytz
 # ==============================================================================
 if not firebase_admin._apps:
     try:
-        # CASO A: Estás en tu computadora (Existe el archivo)
+        # CASO A: Estás en tu computadora
         if os.path.exists("serviceAccountKey.json"):
             cred = credentials.Certificate("serviceAccountKey.json")
         
-        # CASO B: Estás en la Nube (Streamlit Cloud usa "Secrets")
+        # CASO B: Estás en la Nube (Streamlit Cloud)
         else:
-            # Esto busca la configuración interna de la nube
             key_dict = dict(st.secrets["firebase"])
             cred = credentials.Certificate(key_dict)
             
@@ -38,7 +37,7 @@ def cargar_configuracion():
         doc = db.collection('configuracion').document('respuestas_oficiales').get()
         if doc.exists: return doc.to_dict()
     except: pass
-    return {"A": [""]*20, "B": [""]*20, "C": [""]*20}
+    return {"CAT 1": [""]*20, "CAT 2": [""]*20, "CAT 3": [""]*20}
 
 def guardar_categoria_individual(categoria, nuevas_claves):
     try:
@@ -71,15 +70,27 @@ def obtener_patron_respuestas(categoria):
     return cfg.get(categoria, None)
 
 # ==========================================
-# 2. CARGAR DIRECTORIO
+# 2. CARGAR DIRECTORIO (CORREGIDO)
 # ==========================================
 @st.cache_data(ttl=600)
 def cargar_directorio_csv():
     try:
         docs = db.collection('directorio_alumnos').stream()
         lista = [doc.to_dict() for doc in docs]
-        return pd.DataFrame(lista) if lista else pd.DataFrame()
-    except: return pd.DataFrame()
+        
+        if not lista: return pd.DataFrame()
+        
+        df = pd.DataFrame(lista)
+        
+        # --- CORRECCIÓN DE NOMBRE DE COLUMNA ---
+        # Si la base de datos tiene 'colegio' pero el sistema busca 'institucion', lo renombramos aquí.
+        if 'colegio' in df.columns and 'institucion' not in df.columns:
+            df.rename(columns={'colegio': 'institucion'}, inplace=True)
+            
+        return df
+    except Exception as e:
+        # st.error(f"Error directorio: {e}") # Ocultamos error visual para no ensuciar
+        return pd.DataFrame()
 
 # ==========================================
 # 3. GESTIÓN DE RESULTADOS
@@ -146,13 +157,15 @@ def generar_reporte_pdf(df_resultados):
     pdf = PDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # REPORTE 1: TOP 20
+    # ----------------------------------------------------
+    # PAGINA 1: TOP 20
+    # ----------------------------------------------------
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "TOP 20 MEJORES ALUMNOS POR CATEGORIA", ln=True, align='C')
     pdf.ln(5)
     
-    categorias = ["A", "B", "C"]
+    categorias = ["CAT 1", "CAT 2", "CAT 3"]
     
     for cat in categorias:
         pdf.set_font("Arial", "B", 12)
@@ -183,7 +196,9 @@ def generar_reporte_pdf(df_resultados):
                 rank += 1
         pdf.ln(5)
         
-    # REPORTE 2: CAMPEÓN
+    # ----------------------------------------------------
+    # PAGINA 2: RECONOCIMIENTO INSTITUCIONAL
+    # ----------------------------------------------------
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "RECONOCIMIENTO INSTITUCIONAL", ln=True, align='C')
@@ -239,7 +254,9 @@ def generar_reporte_pdf(df_resultados):
                 pdf.cell(30, 8, f"{row['Puntaje']} pts", 0, ln=True)
                 r += 1
 
-    # REPORTE 3: DOCENTES
+    # ----------------------------------------------------
+    # PAGINA 3: DOCENTES
+    # ----------------------------------------------------
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "RECONOCIMIENTO DOCENTE", ln=True, align='C')

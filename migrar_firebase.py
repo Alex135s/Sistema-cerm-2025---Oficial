@@ -90,10 +90,18 @@ for index, row in df.iterrows():
                 nombre_completo = f"{apellidos} {nombres}"
                 
                 # Definir categoría
-                categoria = "A"
-                if grado in ["3ro", "4to"]: categoria = "B"
-                elif grado == "5to": categoria = "C"
+                categoria = "CAT 3" # Por defecto 1ro y 2do
+                if grado == "5to": 
+                    categoria = "CAT 1"
+                elif grado in ["3ro", "4to"]: 
+                    categoria = "CAT 2"
 
+                # Objeto Alumno para Firebase
+                datos_alumno = {
+                    # ... resto de datos ...
+                    "categoria": categoria,
+                    # ...
+                }
                 # Objeto Alumno para Firebase
                 datos_alumno = {
                     "dni": dni,

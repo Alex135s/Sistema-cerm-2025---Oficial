@@ -14,23 +14,20 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# --- 1. CARGAR LA BASE DE DATOS DEL CSV (DIRECTORIO) ---
+# --- 1. CARGAR DIRECTORIO ---
 df_busqueda = utils.cargar_directorio_csv()
 
-# --- 2. EL BUSCADOR INTELIGENTE ---
+# --- 2. BUSCADOR ---
 st.markdown("### 🔍 Buscar Estudiante")
-
 col_busq, col_btn = st.columns([5, 1])
 
 if not df_busqueda.empty:
-    # Aseguramos que el DNI sea string limpio
     df_busqueda['dni_str'] = df_busqueda['dni'].astype(str).str.strip()
     opciones_busqueda = df_busqueda.apply(lambda x: f"{x['dni_str']} | {x['nombre_completo']}", axis=1).tolist()
     opciones_busqueda.insert(0, "")
 else:
     opciones_busqueda = [""]
 
-# Función para limpiar
 def limpiar_todo():
     if "sb_buscador" in st.session_state:
         st.session_state.sb_buscador = opciones_busqueda[0]
@@ -54,10 +51,10 @@ val_inst = ""
 val_ugel = ""
 val_gestion = "Gestión pública"
 val_grado = "1ro"
-val_cat = "A"
+val_cat = "CAT 3" # Default para 1ro
 val_docente = "No registrado"
 
-# Si hay selección, llenamos las variables
+# Si hay selección
 if seleccion and seleccion != "":
     dni_seleccionado = seleccion.split(" | ")[0].strip()
     datos_alumno = df_busqueda[df_busqueda['dni_str'] == dni_seleccionado]
@@ -70,8 +67,7 @@ if seleccion and seleccion != "":
         val_ugel = str(fila['ugel'])
         val_gestion = str(fila['gestion'])
         val_grado = str(fila['grado'])
-        val_cat = str(fila['categoria'])
-        # Recuperamos el docente de forma segura
+        val_cat = str(fila['categoria']) # Viene del CSV ya calculado
         val_docente = str(fila.get('docente', 'No registrado'))
         if val_docente == "nan": val_docente = "No registrado"
         
@@ -91,11 +87,24 @@ with c2:
     # Grado
     grados_opts = ["1ro", "2do", "3ro", "4to", "5to"]
     idx_grado = grados_opts.index(val_grado) if val_grado in grados_opts else 0
-    grado = st.selectbox("Grado / Año", grados_opts, index=idx_grado)
+    # Key para detectar cambios
+    grado = st.selectbox("Grado / Año", grados_opts, index=idx_grado, key="reg_grado")
     
-    # Categoría
-    cat_opts = ["A", "B", "C"]
-    idx_cat = cat_opts.index(val_cat) if val_cat in cat_opts else 0
+    # LÓGICA AUTOMÁTICA DE CATEGORÍA
+    cat_auto = "CAT 3"
+    if grado == "5to": cat_auto = "CAT 1"
+    elif grado in ["3ro", "4to"]: cat_auto = "CAT 2"
+    
+    # Categoría (Selectbox)
+    cat_opts = ["CAT 1", "CAT 2", "CAT 3"]
+    try:
+        # Si la categoría cargada coincide con la lógica, la usamos. Si no, usamos la calculada.
+        idx_cat = cat_opts.index(val_cat)
+        # Validación extra: si cambio el grado manualmente, debe actualizarse
+        if val_cat in ["A", "B", "C"]: idx_cat = cat_opts.index(cat_auto) # Corregir viejas
+    except:
+        idx_cat = cat_opts.index(cat_auto)
+
     categoria = st.selectbox("Categoría", cat_opts, index=idx_cat)
 
     # Gestión
@@ -109,21 +118,16 @@ with c2:
 # --- 5. RESPUESTAS Y HORA ---
 st.markdown("### 📝 Respuestas y Entrega")
 
-# GENERADOR DE HORAS (Cada 5 minutos)
 horas_lista = []
-for h in range(8, 18): # De 8 AM a 6 PM
+for h in range(8, 18):
     for m in range(0, 60, 5):
         horas_lista.append(f"{h:02d}:{m:02d}")
 
-# Obtenemos la hora actual aproximada para pre-seleccionar
-hora_actual = datetime.now().strftime("%H:%M")
-# Buscamos la hora más cercana en la lista
 try:
-    # Lógica simple: seleccionar la hora actual por defecto si está en lista
+    # Seleccionar hora actual
     idx_hora = 0
-    min_diff = 9999
     now_min = datetime.now().hour * 60 + datetime.now().minute
-    
+    min_diff = 9999
     for i, h_str in enumerate(horas_lista):
         hh, mm = map(int, h_str.split(":"))
         h_min = hh * 60 + mm
@@ -133,7 +137,6 @@ try:
 except:
     idx_hora = 0
 
-# Grid para Hora y Respuestas
 col_hora, col_resps = st.columns([1, 3])
 
 with col_hora:
@@ -142,9 +145,8 @@ with col_hora:
 
 with col_resps:
     st.markdown("#### 🔡 Clave de Respuestas")
-    # Contenedor de respuestas
     respuestas = []
-    cols = st.columns(5) # 5 columnas
+    cols = st.columns(5)
     for i in range(1, 21):
         col_index = (i - 1) % 5 
         with cols[col_index]:
@@ -173,7 +175,7 @@ if st.button("💾 Guardar Participante", type="primary", use_container_width=Tr
                 },
                 "examen": {"respuestas": respuestas},
                 "metricas": {"total_puntos": total, "correctas": ok, "incorrectas": bad, "en_blanco": blank},
-                "info_registro": {"hora_entrega": hora_entrega} # <--- GUARDAMOS LA HORA
+                "info_registro": {"hora_entrega": hora_entrega}
             }
             if utils.guardar_alumno(datos):
                 st.success(f"✅ Registrado Exitosamente. Puntaje: {total}")

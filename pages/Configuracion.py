@@ -42,34 +42,34 @@ def seccion_categoria(categoria, titulo, color_tab):
                 key=f"cfg_{categoria}_{i}",
                 placeholder="-"
             )
-            respuestas_temp.append(val if val else "") # Guardar vacío si no se selecciona
+            respuestas_temp.append(val if val else "") 
             
     st.write("")
-    # BOTÓN INDEPENDIENTE POR CATEGORÍA
+    # BOTÓN INDEPENDIENTE
     if st.button(f"💾 Guardar Claves {categoria}", type="primary", use_container_width=True):
         if utils.guardar_categoria_individual(categoria, respuestas_temp):
-            st.success(f"✅ ¡Claves de Categoría {categoria} actualizadas y registradas en el historial!")
+            st.success(f"✅ ¡Claves de Categoría {categoria} actualizadas!")
             st.balloons()
-            st.rerun() # Recargar para ver historial
+            st.rerun() 
         else:
             st.error("Error al guardar.")
 
-# --- PESTAÑAS ---
-tab_a, tab_b, tab_c, tab_hist = st.tabs([
-    "📘 Categoría A (1ro-2do)", 
-    "📗 Categoría B (3ro-4to)", 
-    "📙 Categoría C (5to)",
-    "📜 Historial de Cambios"
+# --- PESTAÑAS NUEVAS (CAT 1, 2, 3) ---
+tab1, tab2, tab3, tab_hist = st.tabs([
+    "🏆 CAT 1 (5to)", 
+    "🥈 CAT 2 (3ro-4to)", 
+    "🥉 CAT 3 (1ro-2do)",
+    "📜 Historial"
 ])
 
-with tab_a:
-    seccion_categoria("A", "Clave Categoría A", "blue")
+with tab1:
+    seccion_categoria("CAT 1", "Clave Categoría 1 (5to Grado)", "orange")
 
-with tab_b:
-    seccion_categoria("B", "Clave Categoría B", "green")
+with tab2:
+    seccion_categoria("CAT 2", "Clave Categoría 2 (3ro y 4to)", "green")
 
-with tab_c:
-    seccion_categoria("C", "Clave Categoría C", "orange")
+with tab3:
+    seccion_categoria("CAT 3", "Clave Categoría 3 (1ro y 2do)", "blue")
 
 # --- HISTORIAL DE CAMBIOS ---
 with tab_hist:
@@ -78,17 +78,9 @@ with tab_hist:
     
     if historial:
         df_hist = pd.DataFrame(historial)
-        # Seleccionar y renombrar columnas para mostrar
         if not df_hist.empty:
             df_show = df_hist[["fecha", "categoria", "claves_guardadas"]]
             df_show.columns = ["Fecha/Hora", "Cat", "Patrón Guardado"]
-            
-            st.dataframe(
-                df_show, 
-                use_container_width=True,
-                column_config={
-                    "Patrón Guardado": st.column_config.TextColumn(width="large")
-                }
-            )
+            st.dataframe(df_show, use_container_width=True)
     else:
-        st.info("No hay cambios registrados en el historial todavía.")
+        st.info("No hay cambios registrados todavía.")
