@@ -7,7 +7,7 @@ import os
 # Configuración de salida
 sys.stdout.reconfigure(encoding='utf-8')
 
-print("--- 🚀 ACTUALIZANDO 4TO GRADO (CON DOCENTES) ---")
+print("--- 🚀 ACTUALIZANDO 5TO GRADO (CON DOCENTES) ---")
 
 # ==========================================
 # 1. CONEXIÓN A FIREBASE
@@ -27,11 +27,11 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # ==========================================
-# 2. CARGAR EL ARCHIVO NUEVO (4TO2.csv)
+# 2. CARGAR EL ARCHIVO (5TO2.csv)
 # ==========================================
-archivo_csv = '4TO2.csv'
+archivo_csv = '5TO2.csv'
 try:
-    # Leemos con header=1 (la fila 2 tiene los títulos)
+    # Leemos con header=1 (la fila 2 tiene los títulos reales)
     df = pd.read_csv(archivo_csv, sep=';', header=1, dtype=str, encoding='utf-8')
     print(f"✅ Archivo cargado. Filas encontradas: {len(df)}")
 except Exception as e:
@@ -45,7 +45,7 @@ batch = db.batch()
 contador_batch = 0
 total_procesados = 0
 
-print("\n⏳ Actualizando registros con datos de docentes...")
+print("\n⏳ Actualizando registros de 5to...")
 
 for index, row in df.iterrows():
     try:
@@ -53,8 +53,9 @@ for index, row in df.iterrows():
         dni_raw = str(row.get('Número de DNI', '')).strip()
         dni = dni_raw.replace(" ", "").replace(".0", "")
         
+        # Validación: Si no hay DNI válido, saltamos
         if not dni.isdigit() or len(dni) < 6:
-            continue # Saltamos filas vacías o inválidas
+            continue 
 
         nombres = str(row.get('Nombres', '')).strip().title()
         apellidos = str(row.get('Apellidos', '')).strip().title()
@@ -65,8 +66,8 @@ for index, row in df.iterrows():
         ugel = str(row.get('UGEL', '')).strip()
         gestion = str(row.get('Tipo de Gestión', '')).strip()
 
-        # --- B. DATOS DEL DOCENTE (Nuevos) ---
-        # Pandas renombra las columnas repetidas con .1
+        # --- B. DATOS DEL DOCENTE ---
+        # Pandas nombra las columnas repetidas con .1
         doc_nom = str(row.get('Nombres.1', '')).strip()
         doc_ape = str(row.get('Apellidos.1', '')).strip()
         
@@ -80,16 +81,16 @@ for index, row in df.iterrows():
             "nombres": nombres,
             "apellidos": apellidos,
             "nombre_completo": nombre_completo,
-            "grado": "4to",
-            "categoria": "CAT 2",
+            "grado": "5to",      # <--- Fijo para este archivo
+            "categoria": "CAT 1", # <--- 5to es CAT 1
             "institucion": institucion,
             "ugel": ugel,
             "gestion": gestion,
-            "docente": docente_nombre # <--- ¡Dato actualizado!
+            "docente": docente_nombre
         }
 
         # --- D. SUBIR (Upsert) ---
-        # Al usar el mismo DNI, sobrescribimos el registro anterior con esta versión mejorada
+        # Usamos .set() con el DNI como ID para sobrescribir/crear sin duplicar
         doc_ref = db.collection('directorio_alumnos').document(dni)
         batch.set(doc_ref, datos_alumno)
         
@@ -105,12 +106,12 @@ for index, row in df.iterrows():
     except Exception as e:
         print(f"⚠️ Error en fila {index}: {e}")
 
-# Guardar lote final
+# Guardar último lote
 if contador_batch > 0:
     batch.commit()
 
 print("\n" + "="*50)
-print(f"🎉 ACTUALIZACIÓN COMPLETADA")
+print(f"🎉 ACTUALIZACIÓN DE 5TO COMPLETADA")
 print(f"✅ Total Alumnos Procesados: {total_procesados}")
-print(f"ℹ️  Ahora todos los alumnos de 4to tienen su docente asignado.")
+print(f"ℹ️  Grado: 5to | Categoría: CAT 1")
 print("="*50)
