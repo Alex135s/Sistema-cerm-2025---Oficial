@@ -2,11 +2,13 @@ import streamlit as st
 from styles import load_styles
 import utils
 import pandas as pd
-import time
+import firebase_admin
+from firebase_admin import firestore
 
-# 1. Configuración de Página y Estilos
+# 1. Configuración
 load_styles()
 st.set_page_config(page_title="Resultados y Ranking", layout="wide")
+db = firestore.client()
 
 st.markdown("""
 <div class="header-container">
@@ -16,13 +18,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # 2. Cargar Datos
-# Usamos try-except para evitar que la página se rompa si la función cambia
 try:
-    # Cargar los resultados de los exámenes (Firebase o Local)
     raw_data = utils.load_data() 
     participantes = raw_data.get("participants", [])
     
-    # Cargar el directorio total (CSV) para calcular ausentismo
     try:
         df_directorio = utils.cargar_directorio_csv()
         total_inscritos = len(df_directorio)
@@ -34,17 +33,15 @@ except Exception as e:
     participantes = []
     total_inscritos = 0
 
-# Convertir a DataFrame para análisis fácil
+# Convertir a DataFrame
 if participantes:
-    # Aplanamos la estructura si viene anidada (depende de tu utils, asumimos estructura plana o semi-plana)
-    # Ajusta los campos según como 'guardar_alumno' los guarde
     data_list = []
     for p in participantes:
         metricas = p.get("metricas", {})
         data_list.append({
             "DNI": p.get("dni"),
             "Estudiante": p.get("nombre"),
-            "Colegio": p.get("colegio"), # Asegúrate que en utils se guarde como 'colegio' o 'institucion'
+            "Colegio": p.get("colegio"), 
             "Grado": p.get("grado"),
             "Categoría": p.get("categoria"),
             "UGEL": p.get("ugel", ""),
@@ -58,7 +55,7 @@ if participantes:
 else:
     df_resultados = pd.DataFrame()
 
-# 3. Métricas Principales (KPIs)
+# 3. Métricas
 col1, col2, col3, col4 = st.columns(4)
 
 total_evaluados = len(df_resultados)
@@ -77,7 +74,7 @@ with col4:
 
 st.write("")
 
-# 4. Filtros y Ranking
+# 4. Tabla y Filtros
 st.markdown("### 🥇 Ranking de Mérito")
 
 c_filtro1, c_filtro2, c_export = st.columns([2, 2, 2])
@@ -86,7 +83,8 @@ with c_filtro1:
     filtro_grado = st.selectbox("Filtrar por Grado:", ["Todos"] + sorted(df_resultados["Grado"].unique().tolist()) if not df_resultados.empty else ["Todos"])
 
 with c_filtro2:
-    filtro_cat = st.selectbox("Filtrar por Categoría:", ["Todos"] + sorted(df_resultados["Categoría"].unique().tolist()) if not df_resultados.empty else ["Todos"])
+    # FILTRO ACTUALIZADO A NUEVAS CATEGORÍAS
+    filtro_cat = st.selectbox("Filtrar por Categoría:", ["Todos", "CAT 1", "CAT 2", "CAT 3"])
 
 # Aplicar Filtros
 df_view = df_resultados.copy()
@@ -96,16 +94,15 @@ if not df_view.empty:
     if filtro_cat != "Todos":
         df_view = df_view[df_view["Categoría"] == filtro_cat]
     
-    # Ordenar por Puntaje Descendente (Ranking)
+    # Ordenar Ranking
     df_view = df_view.sort_values(by=["Puntaje", "Correctas"], ascending=[False, False]).reset_index(drop=True)
-    df_view.index += 1 # Ranking empieza en 1
+    df_view.index += 1 
 
-    # Mostrar Tabla Estilizada
     st.dataframe(
         df_view, 
         use_container_width=True,
         column_config={
-            "Puntaje": st.column_config.ProgressColumn("Puntaje", format="%d pts", min_value=0, max_value=100), # Ajusta max_value a tu puntaje máximo posible (ej. 20 * 5 = 100)
+            "Puntaje": st.column_config.ProgressColumn("Puntaje", format="%d pts", min_value=0, max_value=100),
             "Hora": st.column_config.TextColumn("Hora", help="Hora de recepción del examen")
         }
     )
@@ -113,37 +110,44 @@ else:
     st.info("Aún no hay resultados registrados para mostrar.")
 
 # 5. Exportación
-# ... (dentro de pages/Resultados.py)
-
 with c_export:
     st.write("")
     if not df_view.empty:
-       
         if st.button("📄 Generar Reportes PDF", use_container_width=True):
-            # 1. Cargar directorio completo (que tiene los docentes)
             df_docentes = utils.cargar_directorio_csv()
-            
             if not df_docentes.empty and 'docente' in df_docentes.columns:
-                # Asegurar que ambos DNI sean strings y estén limpios
                 df_docentes['dni_str'] = df_docentes['dni'].astype(str).str.strip()
                 df_resultados['dni_str'] = df_resultados['DNI'].astype(str).str.strip()
-                
-                # Crear mapa DNI -> Docente
                 mapa_docentes = dict(zip(df_docentes['dni_str'], df_docentes['docente']))
-                
-                # Cruzar datos
                 df_resultados['Docente'] = df_resultados['dni_str'].map(mapa_docentes).fillna("No registrado")
             else:
                 df_resultados['Docente'] = "No registrado"
             
-            # Generar PDF
             archivo_pdf = utils.generar_reporte_pdf(df_resultados)
-            
             with open(archivo_pdf, "rb") as f:
-                st.download_button(
-                    label="⬇️ Descargar Reporte Oficial PDF",
-                    data=f,
-                    file_name="Reporte_CERM_2025.pdf",
-                    mime="application/pdf",
-                    type="primary"
-                )
+                st.download_button("⬇️ Descargar Reporte Oficial PDF", f, "Reporte_CERM_2025.pdf", "application/pdf", type="primary")
+
+# ==========================================
+# 6. ZONA DE PELIGRO: ELIMINAR EXÁMENES
+# ==========================================
+st.markdown("---")
+with st.expander("🗑️ Gestión de Resultados (Eliminar Exámenes Erróneos)"):
+    st.warning("⚠️ Esta acción borrará el puntaje y el examen del estudiante. Úsalo para eliminar pruebas o duplicados.")
+    
+    if not df_resultados.empty:
+        # Buscador para eliminar
+        lista_borrar = df_resultados.apply(lambda x: f"{x['DNI']} | {x['Estudiante']} ({x['Puntaje']} pts)", axis=1).tolist()
+        seleccion_borrar = st.selectbox("Seleccione el examen a eliminar:", [""] + lista_borrar)
+        
+        if seleccion_borrar:
+            dni_borrar = seleccion_borrar.split(" | ")[0]
+            if st.button(f"🔥 Eliminar Examen de {dni_borrar}", type="primary"):
+                try:
+                    # Borrar de la colección 'participantes' en Firebase
+                    db.collection('participantes').document(dni_borrar).delete()
+                    st.success("✅ Examen eliminado correctamente.")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Error al eliminar: {e}")
+    else:
+        st.info("No hay exámenes para eliminar.")
