@@ -9,15 +9,13 @@ from datetime import datetime
 import pytz
 
 # ==============================================================================
-# 0. CONEXIÓN A FIREBASE (INTELIGENTE: PC y NUBE)
+# 0. CONEXIÓN A FIREBASE
 # ==============================================================================
 if not firebase_admin._apps:
     try:
-        # CASO A: Estás en tu computadora
+        # Híbrido: Busca archivo local O secretos de la nube
         if os.path.exists("serviceAccountKey.json"):
             cred = credentials.Certificate("serviceAccountKey.json")
-        
-        # CASO B: Estás en la Nube (Streamlit Cloud)
         else:
             key_dict = dict(st.secrets["firebase"])
             cred = credentials.Certificate(key_dict)
@@ -30,7 +28,7 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # ==========================================
-# 1. GESTIÓN DE CONFIGURACIÓN Y HISTORIAL
+# 1. GESTIÓN DE CONFIGURACIÓN (CLAVES)
 # ==========================================
 def cargar_configuracion():
     try:
@@ -45,6 +43,7 @@ def guardar_categoria_individual(categoria, nuevas_claves):
         config_actual[categoria] = nuevas_claves
         db.collection('configuracion').document('respuestas_oficiales').set(config_actual)
         
+        # Historial
         zona_peru = pytz.timezone('America/Lima')
         evento = {
             "fecha": datetime.now(zona_peru).strftime("%Y-%m-%d %H:%M:%S"),
@@ -70,49 +69,61 @@ def obtener_patron_respuestas(categoria):
     return cfg.get(categoria, None)
 
 # ==========================================
-# 2. CARGAR DIRECTORIO (CORREGIDO)
+# 2. CARGAR DIRECTORIO
 # ==========================================
 @st.cache_data(ttl=600)
 def cargar_directorio_csv():
     try:
         docs = db.collection('directorio_alumnos').stream()
         lista = [doc.to_dict() for doc in docs]
-        
         if not lista: return pd.DataFrame()
         
         df = pd.DataFrame(lista)
-        
-        # --- CORRECCIÓN DE NOMBRE DE COLUMNA ---
-        # Si la base de datos tiene 'colegio' pero el sistema busca 'institucion', lo renombramos aquí.
         if 'colegio' in df.columns and 'institucion' not in df.columns:
             df.rename(columns={'colegio': 'institucion'}, inplace=True)
-            
         return df
-    except Exception as e:
-        # st.error(f"Error directorio: {e}") # Ocultamos error visual para no ensuciar
-        return pd.DataFrame()
+    except: return pd.DataFrame()
 
 # ==========================================
-# 3. GESTIÓN DE RESULTADOS
+# 3. GESTIÓN DE RESULTADOS (¡LÓGICA NUEVA!)
 # ==========================================
 def calcular_nota(respuestas_alumno, patron_oficial):
+    """
+    CORRECTA: +5 Puntos
+    INCORRECTA: -2 Puntos (Puntos en contra)
+    BLANCO: 0 Puntos
+    """
     correctas = 0
     incorrectas = 0
     en_blanco = 0
     puntaje = 0
-    PUNTOS = 5
+    
+    PUNTOS_CORRECTA = 5
+    PUNTOS_INCORRECTA = -2  # Restamos 2 puntos
     
     for i in range(20):
         r_alu = respuestas_alumno[i] if i < len(respuestas_alumno) else ""
         r_pat = patron_oficial[i] if i < len(patron_oficial) else ""
         
-        if not r_alu: en_blanco += 1
-        elif r_alu == r_pat:
+        if not r_alu: # Si está vacío (Blanco)
+            en_blanco += 1
+            # No suma ni resta
+        elif r_alu == r_pat: # Correcta
             correctas += 1
-            puntaje += PUNTOS
-        else: incorrectas += 1
+            puntaje += PUNTOS_CORRECTA
+        else: # Incorrecta
+            incorrectas += 1
+            puntaje += PUNTOS_INCORRECTA # Esto resta 2
             
-    metricas = {"total_puntos": puntaje, "correctas": correctas, "incorrectas": incorrectas, "en_blanco": en_blanco}
+    # Evitar puntajes negativos totales (opcional, pero recomendado)
+    if puntaje < 0: puntaje = 0
+            
+    metricas = {
+        "total_puntos": puntaje, 
+        "correctas": correctas, 
+        "incorrectas": incorrectas, 
+        "en_blanco": en_blanco
+    }
     return puntaje, correctas, incorrectas, en_blanco, metricas
 
 def load_data():
@@ -122,6 +133,7 @@ def load_data():
 def guardar_alumno(datos):
     try:
         dni = str(datos['alumno']['dni'])
+        # Asegurar campos
         datos['alumno']['docente'] = datos['alumno'].get('docente', 'No registrado')
         
         registro = {
@@ -147,7 +159,6 @@ def guardar_alumno(datos):
 # 4. REPORTES PDF
 # ==========================================
 def generar_reporte_pdf(df_resultados):
-    
     class PDF(FPDF):
         def header(self):
             self.set_font('Arial', 'B', 10)
@@ -157,9 +168,7 @@ def generar_reporte_pdf(df_resultados):
     pdf = PDF()
     pdf.set_auto_page_break(auto=True, margin=15)
     
-    # ----------------------------------------------------
-    # PAGINA 1: TOP 20
-    # ----------------------------------------------------
+    # REPORTE 1: TOP 20
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "TOP 20 MEJORES ALUMNOS POR CATEGORIA", ln=True, align='C')
@@ -196,9 +205,7 @@ def generar_reporte_pdf(df_resultados):
                 rank += 1
         pdf.ln(5)
         
-    # ----------------------------------------------------
-    # PAGINA 2: RECONOCIMIENTO INSTITUCIONAL
-    # ----------------------------------------------------
+    # REPORTE 2: CAMPEÓN
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "RECONOCIMIENTO INSTITUCIONAL", ln=True, align='C')
@@ -230,43 +237,29 @@ def generar_reporte_pdf(df_resultados):
             pdf.cell(0, 10, "MENCION HONORIFICA", ln=True, align='C')
             
             if len(camp) > 1:
-                segundo = camp.iloc[1]
-                col_2 = str(segundo['Colegio']).encode('latin-1', 'replace').decode('latin-1')
+                seg = camp.iloc[1]
+                c2 = str(seg['Colegio']).encode('latin-1', 'replace').decode('latin-1')
                 pdf.set_fill_color(220, 220, 220)
-                pdf.cell(0, 10, f"2do Puesto: {col_2} ({segundo['Puntaje']} pts)", ln=True, fill=True, align='C')
+                pdf.cell(0, 10, f"2do Puesto: {c2} ({seg['Puntaje']} pts)", ln=True, fill=True, align='C')
             
             if len(camp) > 2:
-                tercero = camp.iloc[2]
-                col_3 = str(tercero['Colegio']).encode('latin-1', 'replace').decode('latin-1')
+                ter = camp.iloc[2]
+                c3 = str(ter['Colegio']).encode('latin-1', 'replace').decode('latin-1')
                 pdf.set_fill_color(205, 127, 50)
-                pdf.cell(0, 10, f"3er Puesto: {col_3} ({tercero['Puntaje']} pts)", ln=True, fill=True, align='C')
-            
+                pdf.cell(0, 10, f"3er Puesto: {c3} ({ter['Puntaje']} pts)", ln=True, fill=True, align='C')
             pdf.ln(10)
-            
-            pdf.set_font("Arial", "B", 12)
-            pdf.cell(0, 10, "Ranking General de Instituciones (Top 5):", ln=True)
-            r = 1
-            pdf.set_font("Arial", "", 10)
-            for _, row in camp.head(5).iterrows():
-                col_name = str(row['Colegio']).encode('latin-1', 'replace').decode('latin-1')
-                pdf.cell(10, 8, f"{r}.", 0)
-                pdf.cell(130, 8, f"{col_name}", 0)
-                pdf.cell(30, 8, f"{row['Puntaje']} pts", 0, ln=True)
-                r += 1
 
-    # ----------------------------------------------------
-    # PAGINA 3: DOCENTES
-    # ----------------------------------------------------
+    # REPORTE 3: DOCENTES
     pdf.add_page()
     pdf.set_font("Arial", "B", 16)
     pdf.cell(0, 10, "RECONOCIMIENTO DOCENTE", ln=True, align='C')
     pdf.ln(5)
     
     pdf.set_font("Arial", "", 11)
-    texto_res = ("Se otorgara Resolucion Directoral Regional de reconocimiento y "
-                 "felicitacion a los docentes asesores de los estudiantes que ocupen "
-                 "los tres primeros puestos en cada categoria.")
-    pdf.multi_cell(0, 6, texto_res, 0, 'C')
+    txt = ("Se otorgara Resolucion Directoral Regional de reconocimiento y "
+           "felicitacion a los docentes asesores de los estudiantes que ocupen "
+           "los tres primeros puestos en cada categoria.")
+    pdf.multi_cell(0, 6, txt, 0, 'C')
     pdf.ln(10)
     
     for cat in categorias:
@@ -280,28 +273,24 @@ def generar_reporte_pdf(df_resultados):
             top3 = df_resultados[df_resultados["Categoría"] == cat].sort_values(by="Puntaje", ascending=False).head(3)
             puesto = 1
             for _, row in top3.iterrows():
-                docente = str(row.get("Docente", "No registrado")).encode('latin-1', 'replace').decode('latin-1')
+                doc = str(row.get("Docente", "No registrado")).encode('latin-1', 'replace').decode('latin-1')
                 est = str(row.get("Estudiante", "")).encode('latin-1', 'replace').decode('latin-1')
                 col = str(row.get("Colegio", "")).encode('latin-1', 'replace').decode('latin-1')
-                ptj = row.get("Puntaje", 0)
                 
                 pdf.ln(2)
                 pdf.set_font("Arial", "B", 11)
                 pdf.set_fill_color(240, 240, 240)
                 pdf.cell(20, 8, f"{puesto} Puesto", 0, 0, fill=True)
                 pdf.set_font("Arial", "", 11)
-                pdf.cell(0, 8, f"  Alumno: {est}  ({ptj} pts)", 0, 1, fill=True)
-                
+                pdf.cell(0, 8, f"  Alumno: {est}", 0, 1, fill=True)
                 pdf.set_text_color(0, 100, 0)
                 pdf.set_font("Arial", "B", 11)
                 pdf.cell(20, 6, "", 0)
-                pdf.cell(0, 6, f"DOCENTE ASESOR: {docente}", 0, 1)
+                pdf.cell(0, 6, f"DOCENTE ASESOR: {doc}", 0, 1)
                 pdf.set_text_color(0,0,0)
-                
                 pdf.set_font("Arial", "I", 10)
                 pdf.cell(20, 5, "", 0)
                 pdf.cell(0, 5, f"Institucion: {col}", 0, 1)
-                
                 pdf.ln(2)
                 pdf.line(10, pdf.get_y(), 200, pdf.get_y())
                 puesto += 1
@@ -311,4 +300,27 @@ def generar_reporte_pdf(df_resultados):
     pdf.output(nombre)
     return nombre
 
-# Actualización forzada
+# ==========================================
+# 5. SEGURIDAD (LOGIN GLOBAL)
+# ==========================================
+def check_password():
+    if st.session_state.get("password_correct", False):
+        return True
+
+    st.markdown("""
+    <div style='text-align: center; margin-top: 50px;'>
+        <h1 style='color: #1A3A8C;'>🔐 Acceso Restringido</h1>
+        <p>Por favor, inicie sesión para continuar.</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    col1, col2, col3 = st.columns([1,2,1])
+    with col2:
+        pwd = st.text_input("Ingrese la clave de acceso:", type="password", key="login_pwd")
+        if st.button("Ingresar", use_container_width=True):
+            if pwd == "cerm2025":
+                st.session_state.password_correct = True
+                st.rerun()
+            else:
+                st.error("🚫 Clave incorrecta")
+    return False

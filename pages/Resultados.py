@@ -48,6 +48,7 @@ if participantes:
             "Gestión": p.get("gestion", ""),
             "Puntaje": metricas.get("total_puntos", 0),
             "Correctas": metricas.get("correctas", 0),
+            "Incorrectas": metricas.get("incorrectas", 0), # <--- AGREGADO AQUÍ
             "En Blanco": metricas.get("en_blanco", 0),
             "Hora": p.get("info_registro", {}).get("hora_entrega", "")
         })
@@ -83,7 +84,6 @@ with c_filtro1:
     filtro_grado = st.selectbox("Filtrar por Grado:", ["Todos"] + sorted(df_resultados["Grado"].unique().tolist()) if not df_resultados.empty else ["Todos"])
 
 with c_filtro2:
-    # FILTRO ACTUALIZADO A NUEVAS CATEGORÍAS
     filtro_cat = st.selectbox("Filtrar por Categoría:", ["Todos", "CAT 1", "CAT 2", "CAT 3"])
 
 # Aplicar Filtros
@@ -94,7 +94,7 @@ if not df_view.empty:
     if filtro_cat != "Todos":
         df_view = df_view[df_view["Categoría"] == filtro_cat]
     
-    # Ordenar Ranking
+    # Ordenar Ranking (Puntaje primero, luego Correctas, luego menos Incorrectas como desempate opcional)
     df_view = df_view.sort_values(by=["Puntaje", "Correctas"], ascending=[False, False]).reset_index(drop=True)
     df_view.index += 1 
 
@@ -135,7 +135,6 @@ with st.expander("🗑️ Gestión de Resultados (Eliminar Exámenes Erróneos)"
     st.warning("⚠️ Esta acción borrará el puntaje y el examen del estudiante. Úsalo para eliminar pruebas o duplicados.")
     
     if not df_resultados.empty:
-        # Buscador para eliminar
         lista_borrar = df_resultados.apply(lambda x: f"{x['DNI']} | {x['Estudiante']} ({x['Puntaje']} pts)", axis=1).tolist()
         seleccion_borrar = st.selectbox("Seleccione el examen a eliminar:", [""] + lista_borrar)
         
@@ -143,7 +142,6 @@ with st.expander("🗑️ Gestión de Resultados (Eliminar Exámenes Erróneos)"
             dni_borrar = seleccion_borrar.split(" | ")[0]
             if st.button(f"🔥 Eliminar Examen de {dni_borrar}", type="primary"):
                 try:
-                    # Borrar de la colección 'participantes' en Firebase
                     db.collection('participantes').document(dni_borrar).delete()
                     st.success("✅ Examen eliminado correctamente.")
                     st.rerun()
