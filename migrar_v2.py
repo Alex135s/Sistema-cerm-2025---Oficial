@@ -7,7 +7,7 @@ import os
 # Configuración de salida
 sys.stdout.reconfigure(encoding='utf-8')
 
-print("--- 🚀 ACTUALIZANDO 2DO GRADO (CON DOCENTES) ---")
+print("--- 🚀 ACTUALIZANDO 1RO GRADO (CON DOCENTES) ---")
 
 # ==========================================
 # 1. CONEXIÓN A FIREBASE
@@ -27,9 +27,9 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # ==========================================
-# 2. CARGAR EL ARCHIVO (2TO2.csv)
+# 2. CARGAR EL ARCHIVO (1TO2.csv)
 # ==========================================
-archivo_csv = '2TO2.csv'
+archivo_csv = '1TO2.csv'
 try:
     # Leemos con header=1 (la fila 2 tiene los títulos reales)
     df = pd.read_csv(archivo_csv, sep=';', header=1, dtype=str, encoding='utf-8')
@@ -45,7 +45,7 @@ batch = db.batch()
 contador_batch = 0
 total_procesados = 0
 
-print("\n⏳ Actualizando registros de 2do...")
+print("\n⏳ Actualizando registros de 1ro...")
 
 for index, row in df.iterrows():
     try:
@@ -81,8 +81,8 @@ for index, row in df.iterrows():
             "nombres": nombres,
             "apellidos": apellidos,
             "nombre_completo": nombre_completo,
-            "grado": "2do",      # <--- Fijo para este archivo
-            "categoria": "CAT 3", # <--- 2do es CAT 3 (junto con 1ro)
+            "grado": "1ro",      # <--- Fijo para este archivo
+            "categoria": "CAT 3", # <--- 1ro es CAT 3 (junto con 2do)
             "institucion": institucion,
             "ugel": ugel,
             "gestion": gestion,
@@ -110,7 +110,7 @@ if contador_batch > 0:
     batch.commit()
 
 print("\n" + "="*50)
-print(f"🎉 ACTUALIZACIÓN DE 2DO COMPLETADA")
+print(f"🎉 ACTUALIZACIÓN DE 1RO COMPLETADA")
 print(f"✅ Total Alumnos Procesados: {total_procesados}")
-print(f"ℹ️  Grado: 2do | Categoría: CAT 3")
+print(f"ℹ️  Grado: 1ro | Categoría: CAT 3")
 print("="*50)
