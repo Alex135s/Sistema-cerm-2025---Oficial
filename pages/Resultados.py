@@ -22,10 +22,12 @@ try:
     raw_data = utils.load_data() 
     participantes = raw_data.get("participants", [])
     
+    # Cargamos el directorio para obtener los docentes
     try:
         df_directorio = utils.cargar_directorio_csv()
         total_inscritos = len(df_directorio)
     except:
+        df_directorio = pd.DataFrame()
         total_inscritos = 0
         
 except Exception as e:
@@ -38,8 +40,11 @@ if participantes:
     data_list = []
     for p in participantes:
         metricas = p.get("metricas", {})
+        # Extraemos la hora para poder ordenar por ella
+        hora_entrega = p.get("info_registro", {}).get("hora_entrega", "23:59:59")
+        
         data_list.append({
-            "DNI": p.get("dni"),
+            "DNI": str(p.get("dni", "")).strip(),
             "Estudiante": p.get("nombre"),
             "Colegio": p.get("colegio"), 
             "Grado": p.get("grado"),
@@ -48,15 +53,24 @@ if participantes:
             "Gestión": p.get("gestion", ""),
             "Puntaje": metricas.get("total_puntos", 0),
             "Correctas": metricas.get("correctas", 0),
-            "Incorrectas": metricas.get("incorrectas", 0), # <--- AGREGADO AQUÍ
+            "Incorrectas": metricas.get("incorrectas", 0),
             "En Blanco": metricas.get("en_blanco", 0),
-            "Hora": p.get("info_registro", {}).get("hora_entrega", "")
+            "Hora": hora_entrega
         })
     df_resultados = pd.DataFrame(data_list)
+
+    # --- CRUCE DE DOCENTES ---
+    if not df_resultados.empty and not df_directorio.empty and 'docente' in df_directorio.columns:
+        df_directorio['dni_key'] = df_directorio['dni'].astype(str).str.strip()
+        mapa_docentes = dict(zip(df_directorio['dni_key'], df_directorio['docente']))
+        df_resultados['Docente'] = df_resultados['DNI'].map(mapa_docentes).fillna("No registrado")
+    elif not df_resultados.empty:
+        df_resultados['Docente'] = "No registrado"
+        
 else:
     df_resultados = pd.DataFrame()
 
-# 3. Métricas
+# 3. Métricas Generales
 col1, col2, col3, col4 = st.columns(4)
 
 total_evaluados = len(df_resultados)
@@ -81,7 +95,8 @@ st.markdown("### 🥇 Ranking de Mérito")
 c_filtro1, c_filtro2, c_export = st.columns([2, 2, 2])
 
 with c_filtro1:
-    filtro_grado = st.selectbox("Filtrar por Grado:", ["Todos"] + sorted(df_resultados["Grado"].unique().tolist()) if not df_resultados.empty else ["Todos"])
+    lista_grados = ["Todos"] + sorted(df_resultados["Grado"].unique().tolist()) if not df_resultados.empty else ["Todos"]
+    filtro_grado = st.selectbox("Filtrar por Grado:", lista_grados)
 
 with c_filtro2:
     filtro_cat = st.selectbox("Filtrar por Categoría:", ["Todos", "CAT 1", "CAT 2", "CAT 3"])
@@ -94,16 +109,33 @@ if not df_view.empty:
     if filtro_cat != "Todos":
         df_view = df_view[df_view["Categoría"] == filtro_cat]
     
-    # Ordenar Ranking (Puntaje primero, luego Correctas, luego menos Incorrectas como desempate opcional)
-    df_view = df_view.sort_values(by=["Puntaje", "Correctas"], ascending=[False, False]).reset_index(drop=True)
+    # ==============================================================================
+    # 🚀 LÓGICA DE ORDENAMIENTO (CRITERIO DE DESEMPATE)
+    # ==============================================================================
+    # 1. Puntaje: Descendente (Mayor gana) -> False
+    # 2. Correctas: Descendente (Mayor gana) -> False
+    # 3. Hora: Ascendente (Menor tiempo/Más temprano gana) -> True
+    df_view = df_view.sort_values(
+        by=["Puntaje", "Correctas", "Hora"], 
+        ascending=[False, False, True]
+    ).reset_index(drop=True)
+    
+    # Puesto (Index + 1)
     df_view.index += 1 
 
+    # Configuración de columnas para mostrar
+    cols_mostrar = ["DNI", "Estudiante", "Puntaje", "Correctas", "Incorrectas", "En Blanco", "Hora", "Grado", "Categoría", "Colegio", "Docente"]
+    # Filtramos para que no falle si alguna columna no existe
+    cols_finales = [c for c in cols_mostrar if c in df_view.columns]
+    
     st.dataframe(
-        df_view, 
+        df_view[cols_finales], 
         use_container_width=True,
         column_config={
             "Puntaje": st.column_config.ProgressColumn("Puntaje", format="%d pts", min_value=0, max_value=100),
-            "Hora": st.column_config.TextColumn("Hora", help="Hora de recepción del examen")
+            "Hora": st.column_config.TextColumn("Hora de Entrega", help="Hora de finalización del examen (criterio de desempate)"),
+            "Docente": st.column_config.TextColumn("Docente Asesor"),
+            "Incorrectas": st.column_config.NumberColumn("Erradas", help="Respuestas incorrectas")
         }
     )
 else:
@@ -114,25 +146,17 @@ with c_export:
     st.write("")
     if not df_view.empty:
         if st.button("📄 Generar Reportes PDF", use_container_width=True):
-            df_docentes = utils.cargar_directorio_csv()
-            if not df_docentes.empty and 'docente' in df_docentes.columns:
-                df_docentes['dni_str'] = df_docentes['dni'].astype(str).str.strip()
-                df_resultados['dni_str'] = df_resultados['DNI'].astype(str).str.strip()
-                mapa_docentes = dict(zip(df_docentes['dni_str'], df_docentes['docente']))
-                df_resultados['Docente'] = df_resultados['dni_str'].map(mapa_docentes).fillna("No registrado")
-            else:
-                df_resultados['Docente'] = "No registrado"
-            
-            archivo_pdf = utils.generar_reporte_pdf(df_resultados)
+            # Usamos el dataframe filtrado y ordenado para el PDF
+            archivo_pdf = utils.generar_reporte_pdf(df_view)
             with open(archivo_pdf, "rb") as f:
-                st.download_button("⬇️ Descargar Reporte Oficial PDF", f, "Reporte_CERM_2025.pdf", "application/pdf", type="primary")
+                st.download_button("⬇️ Descargar Ranking PDF", f, "Ranking_Oficial_CERM.pdf", "application/pdf", type="primary")
 
 # ==========================================
 # 6. ZONA DE PELIGRO: ELIMINAR EXÁMENES
 # ==========================================
 st.markdown("---")
 with st.expander("🗑️ Gestión de Resultados (Eliminar Exámenes Erróneos)"):
-    st.warning("⚠️ Esta acción borrará el puntaje y el examen del estudiante. Úsalo para eliminar pruebas o duplicados.")
+    st.warning("⚠️ Esta acción borrará el puntaje y el examen del estudiante.")
     
     if not df_resultados.empty:
         lista_borrar = df_resultados.apply(lambda x: f"{x['DNI']} | {x['Estudiante']} ({x['Puntaje']} pts)", axis=1).tolist()
@@ -147,5 +171,3 @@ with st.expander("🗑️ Gestión de Resultados (Eliminar Exámenes Erróneos)"
                     st.rerun()
                 except Exception as e:
                     st.error(f"Error al eliminar: {e}")
-    else:
-        st.info("No hay exámenes para eliminar.")

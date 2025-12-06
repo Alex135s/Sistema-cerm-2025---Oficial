@@ -7,7 +7,7 @@ import os
 # Configuración de salida
 sys.stdout.reconfigure(encoding='utf-8')
 
-print("--- 🚀 ACTUALIZANDO 5TO GRADO (CON DOCENTES) ---")
+print("--- 🚀 ACTUALIZANDO 2DO GRADO (CON DOCENTES) ---")
 
 # ==========================================
 # 1. CONEXIÓN A FIREBASE
@@ -27,9 +27,9 @@ if not firebase_admin._apps:
 db = firestore.client()
 
 # ==========================================
-# 2. CARGAR EL ARCHIVO (5TO2.csv)
+# 2. CARGAR EL ARCHIVO (2TO2.csv)
 # ==========================================
-archivo_csv = '5TO2.csv'
+archivo_csv = '2TO2.csv'
 try:
     # Leemos con header=1 (la fila 2 tiene los títulos reales)
     df = pd.read_csv(archivo_csv, sep=';', header=1, dtype=str, encoding='utf-8')
@@ -45,7 +45,7 @@ batch = db.batch()
 contador_batch = 0
 total_procesados = 0
 
-print("\n⏳ Actualizando registros de 5to...")
+print("\n⏳ Actualizando registros de 2do...")
 
 for index, row in df.iterrows():
     try:
@@ -81,8 +81,8 @@ for index, row in df.iterrows():
             "nombres": nombres,
             "apellidos": apellidos,
             "nombre_completo": nombre_completo,
-            "grado": "5to",      # <--- Fijo para este archivo
-            "categoria": "CAT 1", # <--- 5to es CAT 1
+            "grado": "2do",      # <--- Fijo para este archivo
+            "categoria": "CAT 3", # <--- 2do es CAT 3 (junto con 1ro)
             "institucion": institucion,
             "ugel": ugel,
             "gestion": gestion,
@@ -90,7 +90,6 @@ for index, row in df.iterrows():
         }
 
         # --- D. SUBIR (Upsert) ---
-        # Usamos .set() con el DNI como ID para sobrescribir/crear sin duplicar
         doc_ref = db.collection('directorio_alumnos').document(dni)
         batch.set(doc_ref, datos_alumno)
         
@@ -111,7 +110,7 @@ if contador_batch > 0:
     batch.commit()
 
 print("\n" + "="*50)
-print(f"🎉 ACTUALIZACIÓN DE 5TO COMPLETADA")
+print(f"🎉 ACTUALIZACIÓN DE 2DO COMPLETADA")
 print(f"✅ Total Alumnos Procesados: {total_procesados}")
-print(f"ℹ️  Grado: 5to | Categoría: CAT 1")
+print(f"ℹ️  Grado: 2do | Categoría: CAT 3")
 print("="*50)
