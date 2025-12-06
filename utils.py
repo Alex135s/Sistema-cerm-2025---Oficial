@@ -85,7 +85,7 @@ def cargar_directorio_csv():
     except: return pd.DataFrame()
 
 # ==========================================
-# 3. GESTIÓN DE RESULTADOS (¡LÓGICA NUEVA!)
+# 3. GESTIÓN DE RESULTADOS
 # ==========================================
 def calcular_nota(respuestas_alumno, patron_oficial):
     """
@@ -115,7 +115,6 @@ def calcular_nota(respuestas_alumno, patron_oficial):
             incorrectas += 1
             puntaje += PUNTOS_INCORRECTA # Esto resta 2
             
-    # Evitar puntajes negativos totales (opcional, pero recomendado)
     if puntaje < 0: puntaje = 0
             
     metricas = {
@@ -156,7 +155,7 @@ def guardar_alumno(datos):
         return False
 
 # ==========================================
-# 4. REPORTES PDF
+# 4. REPORTES PDF (ACTUALIZADO)
 # ==========================================
 def generar_reporte_pdf(df_resultados):
     class PDF(FPDF):
@@ -183,13 +182,23 @@ def generar_reporte_pdf(df_resultados):
         
         if not df_resultados.empty and "Categoría" in df_resultados.columns:
             top = df_resultados[df_resultados["Categoría"] == cat]
-            top = top.sort_values(by=["Puntaje", "Correctas"], ascending=[False, False]).head(20)
             
+            # --- CRITERIO DE ORDENAMIENTO EXACTO ---
+            # 1. Puntaje (Mayor a menor)
+            # 2. Correctas (Mayor a menor)
+            # 3. Hora (Menor a mayor = Más temprano gana)
+            if "Hora" in top.columns:
+                top = top.sort_values(by=["Puntaje", "Correctas", "Hora"], ascending=[False, False, True]).head(20)
+            else:
+                top = top.sort_values(by=["Puntaje", "Correctas"], ascending=[False, False]).head(20)
+            
+            # Encabezados de Tabla (Ancho Total A4 útil ~180-190)
             pdf.set_font("Arial", "B", 9)
             pdf.cell(10, 8, "No.", 1, align='C')
-            pdf.cell(80, 8, "Estudiante", 1)
-            pdf.cell(80, 8, "Colegio", 1)
+            pdf.cell(65, 8, "Estudiante", 1)  # Reducido un poco para dar espacio a hora
+            pdf.cell(65, 8, "Colegio", 1)     # Reducido un poco para dar espacio a hora
             pdf.cell(20, 8, "Pts", 1, align='C')
+            pdf.cell(25, 8, "Hora", 1, align='C') # NUEVA COLUMNA
             pdf.ln()
             
             pdf.set_font("Arial", "", 9)
@@ -197,10 +206,13 @@ def generar_reporte_pdf(df_resultados):
             for _, row in top.iterrows():
                 est = str(row.get("Estudiante","")).encode('latin-1', 'replace').decode('latin-1')
                 col = str(row.get("Colegio","")).encode('latin-1', 'replace').decode('latin-1')
+                hora = str(row.get("Hora", "--:--"))
+                
                 pdf.cell(10, 6, str(rank), 1, align='C')
-                pdf.cell(80, 6, est[:40], 1)
-                pdf.cell(80, 6, col[:40], 1)
+                pdf.cell(65, 6, est[:35], 1) # Cortamos texto si es muy largo
+                pdf.cell(65, 6, col[:35], 1)
                 pdf.cell(20, 6, str(row.get("Puntaje",0)), 1, align='C')
+                pdf.cell(25, 6, hora, 1, align='C')
                 pdf.ln()
                 rank += 1
         pdf.ln(5)
@@ -270,7 +282,18 @@ def generar_reporte_pdf(df_resultados):
         pdf.set_text_color(0, 0, 0)
         
         if not df_resultados.empty:
-            top3 = df_resultados[df_resultados["Categoría"] == cat].sort_values(by="Puntaje", ascending=False).head(3)
+            # Reutilizamos el mismo criterio de ordenamiento para los docentes
+            if "Hora" in df_resultados.columns:
+                 top3 = df_resultados[df_resultados["Categoría"] == cat].sort_values(
+                     by=["Puntaje", "Correctas", "Hora"], 
+                     ascending=[False, False, True]
+                 ).head(3)
+            else:
+                 top3 = df_resultados[df_resultados["Categoría"] == cat].sort_values(
+                     by=["Puntaje", "Correctas"], 
+                     ascending=[False, False]
+                 ).head(3)
+
             puesto = 1
             for _, row in top3.iterrows():
                 doc = str(row.get("Docente", "No registrado")).encode('latin-1', 'replace').decode('latin-1')
