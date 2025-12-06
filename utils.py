@@ -310,3 +310,5 @@ def generar_reporte_pdf(df_resultados):
     nombre = "Reporte_Oficial_CERM_2025.pdf"
     pdf.output(nombre)
     return nombre
+
+# Actualización forzada
