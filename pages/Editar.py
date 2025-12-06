@@ -7,6 +7,32 @@ import pandas as pd
 load_styles()
 st.set_page_config(page_title="Editar Registros", layout="wide")
 
+# CSS Personalizado para las cajitas de respuesta
+st.markdown("""
+<style>
+    .question-box {
+        background-color: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 10px;
+        text-align: center;
+        margin-bottom: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+    }
+    .question-label {
+        font-weight: 700;
+        color: #1A3A8C;
+        font-size: 16px;
+        margin-bottom: 5px;
+        display: block;
+    }
+    /* Ajuste para centrar el selectbox dentro del div */
+    div[data-testid="stSelectbox"] {
+        min-width: 100% !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.markdown("""
 <div class="header-container">
     <h1 class="header-title">✏️ Gestión y Corrección</h1>
@@ -20,7 +46,6 @@ try:
     raw_resultados = utils.load_data()
     lista_resultados = raw_resultados.get("participants", [])
     
-    # Mapa de búsqueda DNI -> Examen
     mapa_examenes = {}
     for r in lista_resultados:
         d = str(r.get('dni', '')).strip()
@@ -62,7 +87,7 @@ inst_val = ""
 ugel_val = ""
 gestion_val = "Gestión pública"
 grado_val = "1ro"
-cat_val = "CAT 3" # Valor por defecto actualizado
+cat_val = "CAT 3"
 docente_val = "No registrado"
 respuestas_actuales = [""] * 20 
 hora_val = "09:30" 
@@ -71,8 +96,6 @@ examen_encontrado = False
 # --- CARGA DE DATOS ---
 if seleccion and seleccion != "":
     dni_sel = seleccion.split(" | ")[0].strip()
-    
-    # 1. Datos Personales
     datos_dir = df_directorio[df_directorio['dni_str'] == dni_sel]
     
     if not datos_dir.empty:
@@ -87,27 +110,21 @@ if seleccion and seleccion != "":
         docente_val = str(fila.get('docente', 'No registrado'))
         if docente_val == "nan": docente_val = "No registrado"
         
-        # 2. Datos del Examen (Firebase)
         if dni_sel in mapa_examenes:
             examen = mapa_examenes[dni_sel]
             examen_encontrado = True
-            
             st.success(f"✅ **EXAMEN ENCONTRADO:** Mostrando respuestas guardadas de {nombre_val}.")
             
-            # Cargar respuestas
             resps = examen.get("respuestas", [])
             if len(resps) < 20: resps += [""] * (20 - len(resps))
             respuestas_actuales = resps
             
-            # Cargar hora si existe
             info = examen.get("info_registro", {})
             if isinstance(info, dict):
                 hora_val = info.get("hora_entrega", "09:30")
                 
-            # Si el examen tenía una categoría guardada, usamos esa (útil si se cambió manualmente)
             cat_guardada = examen.get("categoria")
-            if cat_guardada:
-                cat_val = cat_guardada
+            if cat_guardada: cat_val = cat_guardada
         else:
             st.warning(f"⚠️ El alumno {nombre_val} está en el padrón pero **NO TIENE EXAMEN REGISTRADO** aún.")
 
@@ -116,37 +133,33 @@ st.markdown("---")
 
 with st.form("form_edicion"):
     # Sección Datos
+    st.markdown("#### 👤 Datos Personales")
     c1, c2 = st.columns(2)
     with c1:
-        new_dni = st.text_input("DNI", value=dni_val)
-        new_nombre = st.text_input("Nombres y Apellidos", value=nombre_val)
-        new_inst = st.text_input("Institución Educativa", value=inst_val)
-        new_ugel = st.text_input("UGEL", value=ugel_val)
+        new_dni = st.text_input("🆔 DNI", value=dni_val)
+        new_nombre = st.text_input("👤 Nombres y Apellidos", value=nombre_val)
+        new_inst = st.text_input("🏫 Institución Educativa", value=inst_val)
+        new_ugel = st.text_input("📍 UGEL", value=ugel_val)
     
     with c2:
         grados = ["1ro", "2do", "3ro", "4to", "5to"]
         idx_g = grados.index(grado_val) if grado_val in grados else 0
-        new_grado = st.selectbox("Grado", grados, index=idx_g)
+        new_grado = st.selectbox("🎓 Grado", grados, index=idx_g)
         
-        # --- AQUÍ ESTABA EL ERROR: ACTUALIZAMOS LAS OPCIONES ---
         cats = ["CAT 1", "CAT 2", "CAT 3"]
-        
-        # Intentamos encontrar el índice de la categoría actual
-        try:
-            idx_c = cats.index(cat_val)
-        except:
-            # Si tiene una categoría vieja ("A", "B", "C"), calculamos la nueva por defecto
-            if new_grado == "5to": idx_c = 0 # CAT 1
-            elif new_grado in ["3ro", "4to"]: idx_c = 1 # CAT 2
-            else: idx_c = 2 # CAT 3
+        try: idx_c = cats.index(cat_val)
+        except: 
+            if new_grado == "5to": idx_c = 0 
+            elif new_grado in ["3ro", "4to"]: idx_c = 1 
+            else: idx_c = 2 
             
-        new_cat = st.selectbox("Categoría", cats, index=idx_c)
+        new_cat = st.selectbox("🏷️ Categoría", cats, index=idx_c)
 
         gests = ["Gestión pública", "Gestión privada"]
         idx_gs = 1 if "privada" in str(gestion_val).lower() else 0
-        new_gestion = st.selectbox("Gestión", gests, index=idx_gs)
+        new_gestion = st.selectbox("🏢 Gestión", gests, index=idx_gs)
         
-        st.text_input("Docente (Solo lectura)", value=docente_val, disabled=True)
+        st.text_input("👨‍🏫 Docente (Solo lectura)", value=docente_val, disabled=True)
 
     st.markdown("---")
     st.markdown("#### 📝 Corregir Respuestas y Hora")
@@ -160,26 +173,32 @@ with st.form("form_edicion"):
     try: idx_h = horas_lista.index(hora_val)
     except: idx_h = 0
     
-    c_hora, c_resp = st.columns([1, 3])
+    # --- DISEÑO MEJORADO DE RESPUESTAS ---
+    # Usamos un contenedor principal para la cuadrícula
+    
+    c_hora, c_resp = st.columns([1, 4])
+    
     with c_hora:
-        new_hora = st.selectbox("Hora de Entrega", horas_lista, index=idx_h)
+        st.markdown("<br>", unsafe_allow_html=True) # Espacio para alinear
+        new_hora = st.selectbox("⏰ Hora de Entrega", horas_lista, index=idx_h)
     
     with c_resp:
-        # GRID RESPUESTAS
+        # GRID DE 10 COLUMNAS (2 FILAS) PARA QUE SE VEA COMPACTO Y ORDENADO
+        # Fila 1: P1 - P10
+        cols_r1 = st.columns(10)
         resps_editadas = []
         opciones = ["", "A", "B", "C", "D", "E"]
-        cols_r = st.columns(5)
         
-        for i in range(1, 21):
-            col_idx = (i-1) % 5
-            with cols_r[col_idx]:
-                val_prev = respuestas_actuales[i-1]
+        for i in range(1, 11): # 1 al 10
+            with cols_r1[i-1]:
+                # Usamos HTML para el estilo "Cajita"
+                st.markdown(f'<div class="question-box"><span class="question-label">P{i}</span></div>', unsafe_allow_html=True)
                 
+                val_prev = respuestas_actuales[i-1]
                 try: idx_r = opciones.index(val_prev)
                 except: idx_r = 0
                 
-                key_unica = f"ed_p{i}_{dni_val}" 
-                
+                key_unica = f"ed_p{i}_{dni_val}"
                 val = st.selectbox(
                     f"P{i}", 
                     opciones, 
@@ -187,7 +206,28 @@ with st.form("form_edicion"):
                     key=key_unica,
                     label_visibility="collapsed"
                 )
-                st.caption(f"P{i}")
+                resps_editadas.append(val)
+        
+        st.write("") # Separador visual entre filas
+        
+        # Fila 2: P11 - P20
+        cols_r2 = st.columns(10)
+        for i in range(11, 21): # 11 al 20
+            with cols_r2[i-11]:
+                st.markdown(f'<div class="question-box"><span class="question-label">P{i}</span></div>', unsafe_allow_html=True)
+                
+                val_prev = respuestas_actuales[i-1]
+                try: idx_r = opciones.index(val_prev)
+                except: idx_r = 0
+                
+                key_unica = f"ed_p{i}_{dni_val}"
+                val = st.selectbox(
+                    f"P{i}", 
+                    opciones, 
+                    index=idx_r, 
+                    key=key_unica,
+                    label_visibility="collapsed"
+                )
                 resps_editadas.append(val)
 
     st.markdown("---")
