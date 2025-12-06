@@ -142,30 +142,41 @@ with st.form("form_registro"):
     st.markdown("---")
     st.markdown("#### 📝 Respuestas y Entrega")
 
-    # Hora
+    # =========================================================
+    # ACTUALIZACIÓN DE HORARIO: 10:30 AM a 4:00 PM (minuto a minuto)
+    # =========================================================
     horas_lista = []
-    for h in range(8, 18):
-        for m in range(0, 60, 5):
+    
+    # Rango de horas: 10 a 16
+    for h in range(10, 17): 
+        for m in range(60):
+            # Restricción inicio: Nada antes de las 10:30
+            if h == 10 and m < 30:
+                continue
+            
+            # Restricción final: Nada después de las 16:00
+            if h == 16 and m > 0:
+                break
+                
             horas_lista.append(f"{h:02d}:{m:02d}")
 
-    try:
-        idx_hora = 0
-        now_min = datetime.now().hour * 60 + datetime.now().minute
-        min_diff = 9999
-        for i, h_str in enumerate(horas_lista):
-            hh, mm = map(int, h_str.split(":"))
-            h_min = hh * 60 + mm
-            if abs(h_min - now_min) < min_diff:
-                min_diff = abs(h_min - now_min)
-                idx_hora = i
-    except:
-        idx_hora = 0
+    # Seleccionar automáticamente la hora actual si está en rango
+    idx_hora = 0
+    now = datetime.now()
+    hora_actual_str = now.strftime("%H:%M")
+    
+    if hora_actual_str in horas_lista:
+        try:
+            idx_hora = horas_lista.index(hora_actual_str)
+        except:
+            idx_hora = 0
 
     # Grid de Respuestas Mejorado
     c_hora, c_resp = st.columns([1, 4])
 
     with c_hora:
         st.markdown("<br>", unsafe_allow_html=True)
+        # Selectbox con 1 minuto de precisión
         hora_entrega = st.selectbox("⏰ Hora de Entrega", horas_lista, index=idx_hora)
 
     with c_resp:

@@ -90,7 +90,7 @@ grado_val = "1ro"
 cat_val = "CAT 3"
 docente_val = "No registrado"
 respuestas_actuales = [""] * 20 
-hora_val = "09:30" 
+hora_val = "10:30"  # Default actualizado al inicio del rango
 examen_encontrado = False
 
 # --- CARGA DE DATOS ---
@@ -121,7 +121,7 @@ if seleccion and seleccion != "":
             
             info = examen.get("info_registro", {})
             if isinstance(info, dict):
-                hora_val = info.get("hora_entrega", "09:30")
+                hora_val = info.get("hora_entrega", "10:30")
                 
             cat_guardada = examen.get("categoria")
             if cat_guardada: cat_val = cat_guardada
@@ -164,14 +164,27 @@ with st.form("form_edicion"):
     st.markdown("---")
     st.markdown("#### 📝 Corregir Respuestas y Hora")
     
-    # Hora
+    # =========================================================
+    # ACTUALIZACIÓN DE HORARIO: 10:30 AM a 4:00 PM (minuto a minuto)
+    # =========================================================
     horas_lista = []
-    for h in range(8, 18):
-        for m in range(0, 60, 5):
+    # Rango de horas: 10 a 16
+    for h in range(10, 17): 
+        for m in range(60):
+            # Restricción inicio: Nada antes de las 10:30
+            if h == 10 and m < 30:
+                continue
+            # Restricción final: Nada después de las 16:00
+            if h == 16 and m > 0:
+                break
             horas_lista.append(f"{h:02d}:{m:02d}")
     
-    try: idx_h = horas_lista.index(hora_val)
-    except: idx_h = 0
+    # Intentar buscar la hora guardada en la nueva lista
+    try: 
+        idx_h = horas_lista.index(hora_val)
+    except: 
+        # Si la hora antigua no existe en el rango nuevo, mostrar la primera (10:30)
+        idx_h = 0
     
     # --- DISEÑO MEJORADO DE RESPUESTAS ---
     # Usamos un contenedor principal para la cuadrícula
